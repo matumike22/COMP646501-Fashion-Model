@@ -3,6 +3,28 @@ import torch.nn as nn  # neural network modules
 import torch.nn.functional as F  # useful stateless functions
 
 
+class ResNetBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, stride=1):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        self.conv2 = nn.Conv2d(
+            out_channels, out_channels, 3, padding=1, bias=False
+        )
+        self.bn2 = nn.BatchNorm2d(out_channels)
+        self.shortcut = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 1, bias=False),
+            nn.BatchNorm2d(out_channels),
+        )
+
+
+    def forward(self, x):
+        main = F.relu(self.bn1(self.conv1(x)))
+        main = self.bn2(self.conv2(main))
+        shortcut = self.shortcut(x)
+        return F.relu(main + shortcut)
+
+
 class Net(nn.Module):
     """
     Define your model here. Feel free to modify all code below, but do not change the class name, and make sure Net() works with no arguments.
@@ -14,18 +36,21 @@ class Net(nn.Module):
 
         # We define the layers of our model here by instantiating layer objects.
         # Here we define two fully connected (linear) layers.
-        self.fc1 = nn.Linear(input_size, hidden_size)
-        self.fc2 = nn.Linear(hidden_size, num_classes)
+        self.stem = nn.Sequential(
+            nn.Conv2d(1, 24, 3, padding=1, bias=False),
+            nn.BatchNorm2d(24),
+            nn.ReLU(),
+        )
+        self.block1 = ResNetBlock(24, 32)
+        self.block2 = ResNetBlock(32, 48)
+        self.classifier = nn.Linear(48 * 3 * 3, 10)
 
-        # nn.init module contains initialization methods:
-        # https://docs.pytorch.org/docs/main/nn.init.html
-        # This particular one is called Kaiming initialization (also known as
-        # He initialization) described in He, K. et al. (2015)
-        nn.init.kaiming_normal_(self.fc1.weight)
 
     def forward(self, x):
-        # The forward pass defines the connectivity of the layers defined in __init__.
-        x = x.view(x.size(0), -1)  # flatten the input tensor (first dimension is batch size)
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x
+        # Define the forward pass of the model. This is where we specify how the input data flows through the layers.
+        x = self.stem(x)
+        x = F.max_pool2d(self.block1(x), 2)
+        x = F.max_pool2d(self.block2(x), 2)
+        x = F.adaptive_avg_pool2d(x, (3, 3))
+        x = torch.flatten(x, start_dim=1)
+        return self.classifier(x)

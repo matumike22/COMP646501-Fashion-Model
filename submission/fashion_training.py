@@ -11,7 +11,7 @@ import torch, torchvision
 
 from submission import engine
 from submission.fashion_model import Net
-
+from sklearn.model_selection import StratifiedKFold
 
 def train_fashion_model(fashion_mnist, 
                         n_epochs, 
@@ -20,7 +20,9 @@ def train_fashion_model(fashion_mnist,
                         USE_GPU=False,
                         seed=None,
                         model_kwargs=None,
-                        return_state_dict_only=True,):
+                        return_state_dict_only=True,
+                        split_indices=None,
+                        ):
     """
     You can modify the contents of this function as needed, but DO NOT CHANGE the arguments,
     the function name, or the return value when return_state_dict_only=True, as this will be called during marking!
@@ -38,14 +40,33 @@ def train_fashion_model(fashion_mnist,
         device = torch.device('cpu')
     print(f"Using device: {device}")
 
-    # Create train-val split
-    train_size = int(0.8 * len(fashion_mnist))
-    val_size = len(fashion_mnist) - train_size
-    train_split, val_split = torch.utils.data.random_split(fashion_mnist, [train_size, val_size])
+    # # Create train-val split
+    # train_size = int(0.8 * len(fashion_mnist))
+    # val_size = len(fashion_mnist) - train_size
+    # train_split, val_split = torch.utils.data.random_split(fashion_mnist, [train_size, val_size])
 
-    # Create datasets with transforms. You may wish to apply different transforms to the training and validation datasets
-    train_data = engine.SubsetWithTransform(fashion_mnist, train_split.indices, get_transforms('train'))
-    val_data = engine.SubsetWithTransform(fashion_mnist, val_split.indices, get_transforms('eval'))
+    # # Create datasets with transforms. You may wish to apply different transforms to the training and validation datasets
+    # train_data = engine.SubsetWithTransform(fashion_mnist, train_split.indices, get_transforms('train'))
+    # val_data = engine.SubsetWithTransform(fashion_mnist, val_split.indices, get_transforms('eval'))
+
+    if split_indices is None:
+        train_size = int(0.8 * len(fashion_mnist))
+        val_size = len(fashion_mnist) - train_size
+        train_split, val_split = torch.utils.data.random_split(
+            fashion_mnist, [train_size, val_size]
+        )
+        train_indices = train_split.indices
+        val_indices = val_split.indices
+    else:
+        train_indices, val_indices = split_indices
+
+    train_data = engine.SubsetWithTransform(
+        fashion_mnist, train_indices, get_transforms('train')
+    )
+    val_data = engine.SubsetWithTransform(
+        fashion_mnist, val_indices, get_transforms('eval')
+    )
+
 
     # dataloaders
     train_loader = torch.utils.data.DataLoader(train_data,
@@ -63,6 +84,7 @@ def train_fashion_model(fashion_mnist,
     criterion = torch.nn.CrossEntropyLoss()
     criterion.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.3)
 
     # Training loop
     train_losses, val_losses, val_accuracies = [], [], []
@@ -74,6 +96,7 @@ def train_fashion_model(fashion_mnist,
         train_losses.append(train_loss)
         val_losses.append(val_loss)
         val_accuracies.append(accuracy)
+        scheduler.step()
 
     # Return the model's state_dict (weights) - DO NOT CHANGE THIS
     if return_state_dict_only:
@@ -121,20 +144,43 @@ def main():
     # you could create a separate file that calls train_fashion_model with different parameters
     # or modify this as needed to add cross-validation, hyperparameter tuning, etc.
     fashion_mnist = load_training_data()
+   
 
     # TODO: create data splits
-
+    splitter = StratifiedKFold(n_splits=5, shuffle=True, random_state=0)
+    folds = list(splitter.split(fashion_mnist.data, fashion_mnist.targets))
     # TODO: implement hyperparameter search
 
     # Train model 
     # TODO: this may be done within a loop for hyperparameter search / cross-validation
-    model_weights = train_fashion_model(fashion_mnist, n_epochs=1, seed=0)
+   
+    fold_accuracies = []
+    n_epochs = 7
+
+
+    for fold_number, split in enumerate(folds, start=1):
+        print(f"\nFold {fold_number}/{len(folds)}")
+
+        model_weights, _, _, val_accuracies = train_fashion_model(
+            fashion_mnist,
+            n_epochs=n_epochs,
+            seed=0,
+            split_indices=split,
+            return_state_dict_only=False,
+        )
+
+        fold_accuracies.append(val_accuracies)
+
+    for epoch_index in range(n_epochs):
+        scores = [history[epoch_index] for history in fold_accuracies]
+        mean_accuracy = sum(scores) / len(scores)
+        print(f"Epoch {epoch_index + 1}: mean validation accuracy {mean_accuracy:.2%}")
 
     # Save model weights
     # However you tune and evaluate your model, make sure to save the final weights 
     # to submission/model_weights.pth before submission!
     model_save_path = os.path.join('submission', 'model_weights.pth')
-    torch.save(model_weights, f=model_save_path)
+    # torch.save(model_weights, f=model_save_path)
 
 
 if __name__ == "__main__":
