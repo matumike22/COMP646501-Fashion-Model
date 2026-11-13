@@ -180,7 +180,7 @@ def main():
     # However you tune and evaluate your model, make sure to save the final weights 
     # to submission/model_weights.pth before submission!
     model_save_path = os.path.join('submission', 'model_weights.pth')
-    # torch.save(model_weights, f=model_save_path)
+    torch.save(model_weights, f=model_save_path)
 
 
 if __name__ == "__main__":
