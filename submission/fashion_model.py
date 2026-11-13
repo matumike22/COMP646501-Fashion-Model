@@ -42,13 +42,8 @@ class Net(nn.Module):
             nn.ReLU(),
         )
         self.block1 = ResNetBlock(24, 32)
-        self.block2 = ResNetBlock(32, 48)
-        self.extra_conv = nn.Sequential(
-            nn.Conv2d(48, 48, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(48),
-            nn.ReLU(),
-        )
-        self.classifier = nn.Linear(48 * 3 * 3, 10)
+        self.block2 = ResNetBlock(32, 64)
+        self.classifier = nn.Linear(64 * 3 * 3, 10)
 
 
     def forward(self, x):
@@ -57,7 +52,6 @@ class Net(nn.Module):
         x = F.max_pool2d(self.block1(x), 2)
         x = F.max_pool2d(self.block2(x), 2)
 
-        x= self.extra_conv(x)
 
         x = F.adaptive_avg_pool2d(x, (3, 3))
         x = torch.flatten(x, start_dim=1)
