@@ -1,5 +1,5 @@
 """
-Feel free to replace this code with your own model training code. 
+Feel free to replace this code with your own model training code.
 This is just a simple example to get you started.
 
 This training script uses imports relative to the project root directory.
@@ -8,16 +8,14 @@ and execute: uv run -m submission.fashion_training
 """
 import argparse
 from pathlib import Path
-from time import perf_counter
 
 import torch, torchvision
 
 from submission import engine
 from submission.fashion_model import Net
-from sklearn.model_selection import StratifiedKFold
 
-def train_fashion_model(fashion_mnist, 
-                        n_epochs, 
+def train_fashion_model(fashion_mnist,
+                        n_epochs,
                         batch_size=32,
                         learning_rate=0.001,
                         USE_GPU=False,
@@ -103,7 +101,7 @@ def train_fashion_model(fashion_mnist,
 def get_transforms(mode='train', *, horizontal_flip=False):
     """
     Define any data augmentations or preprocessing here if needed.
-    Only standard torchvision transforms are permitted (no lambda functions, sorry), please check that 
+    Only standard torchvision transforms are permitted (no lambda functions, sorry), please check that
     these pass by running model_calls.py before submission. The 'eval' transforms must be
     deterministic (no random augmentation), so only use transforms such as ToTensor, Normalize,
     Pad, Resize or CenterCrop there.
@@ -127,13 +125,13 @@ def load_training_data():
         train=True,
         download=True,
     )
-    # We load in data as the raw PIL images - recommended to have a look in visualise_dataset.ipynb! 
+    # We load in data as the raw PIL images - recommended to have a look in visualise_dataset.ipynb!
     return fashion_mnist
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Cross-validate and train the Fashion-MNIST model.")
-    parser.add_argument("--epochs", type=int, default=20, help="Epochs to evaluate per fold.")
+    parser = argparse.ArgumentParser(description="Train Fashion-MNIST with a fixed 80/20 train/validation split.")
+    parser.add_argument("--epochs", type=int, default=40, help="Number of training epochs.")
     parser.add_argument("--gpu", action="store_true", help="Train on CUDA.")
     parser.add_argument("--horizontal-flip", action="store_true", help="Flip training images with probability 0.5.")
     args = parser.parse_args()
@@ -145,18 +143,17 @@ def main():
         print(f"GPU: {torch.cuda.get_device_name(0)}")
 
     dataset = load_training_data()
-    splitter = StratifiedKFold(n_splits=5, shuffle=True, random_state=0)
-    folds = list(splitter.split(dataset.data, dataset.targets))
     training_options = dict(USE_GPU=args.gpu, seed=0, horizontal_flip=args.horizontal_flip)
 
-    weights = train_fashion_model(
-            dataset,
-            n_epochs=40,
-            split_indices=(range(len(dataset)), []),
-            **training_options,
-        )
+    # Single 80/20 split. Comment out this call before enabling cross-validation.
+    weights = train_fashion_model(dataset, n_epochs=40, **training_options)
 
-    ## cross-validation code
+    # To use cross-validation, uncomment the block below through the final fit.
+    # from time import perf_counter
+    # from sklearn.model_selection import StratifiedKFold
+    #
+    # splitter = StratifiedKFold(n_splits=5, shuffle=True, random_state=0)
+    # folds = list(splitter.split(dataset.data, dataset.targets))
     # fold_accuracies = []
     # fold_losses = []
     # cv_start = perf_counter()
