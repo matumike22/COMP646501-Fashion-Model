@@ -149,45 +149,53 @@ def main():
     folds = list(splitter.split(dataset.data, dataset.targets))
     training_options = dict(USE_GPU=args.gpu, seed=0, horizontal_flip=args.horizontal_flip)
 
-    fold_accuracies = []
-    fold_losses = []
-    cv_start = perf_counter()
-
-    for fold_number, split in enumerate(folds, start=1):
-        print(f"\nFold {fold_number}/{len(folds)}")
-        fold_start = perf_counter()
-        _, _, val_losses, val_accuracies = train_fashion_model(
+    weights = train_fashion_model(
             dataset,
-            n_epochs=args.epochs,
-            split_indices=split,
-            return_state_dict_only=False,
+            n_epochs=40,
+            split_indices=(range(len(dataset)), []),
             **training_options,
         )
-        fold_losses.append(val_losses)
-        fold_accuracies.append(val_accuracies)
-        print(f"Fold {fold_number} wall-clock time: {perf_counter() - fold_start:.1f} s")
 
-    mean_accuracies = []
-    mean_losses = []
-    for epoch_index, (accuracies, losses) in enumerate(
-        zip(zip(*fold_accuracies), zip(*fold_losses)), start=1
-    ):
-        mean_accuracy = sum(accuracies) / len(accuracies)
-        mean_loss = sum(losses) / len(losses)
-        mean_accuracies.append(mean_accuracy)
-        mean_losses.append(mean_loss)
-        print(f"Epoch {epoch_index}: mean validation accuracy {mean_accuracy:.2%}, mean val loss {mean_loss:.4f}")
+    ## cross-validation code
+    # fold_accuracies = []
+    # fold_losses = []
+    # cv_start = perf_counter()
 
-    print(f"Cross-validation wall-clock time: {perf_counter() - cv_start:.1f} s")
-    best_index = max(range(args.epochs), key=lambda i: (mean_accuracies[i], -mean_losses[i]))
-    final_epochs = best_index + 1
-    print(f"\nTraining on all {len(dataset):,} images for {final_epochs} epochs.")
-    weights = train_fashion_model(
-        dataset,
-        n_epochs=final_epochs,
-        split_indices=(range(len(dataset)), []),
-        **training_options,
-    )
+    # for fold_number, split in enumerate(folds, start=1):
+    #     print(f"\nFold {fold_number}/{len(folds)}")
+    #     fold_start = perf_counter()
+    #     _, _, val_losses, val_accuracies = train_fashion_model(
+    #         dataset,
+    #         n_epochs=args.epochs,
+    #         split_indices=split,
+    #         return_state_dict_only=False,
+    #         **training_options,
+    #     )
+    #     fold_losses.append(val_losses)
+    #     fold_accuracies.append(val_accuracies)
+    #     print(f"Fold {fold_number} wall-clock time: {perf_counter() - fold_start:.1f} s")
+
+    # mean_accuracies = []
+    # mean_losses = []
+    # for epoch_index, (accuracies, losses) in enumerate(
+    #     zip(zip(*fold_accuracies), zip(*fold_losses)), start=1
+    # ):
+    #     mean_accuracy = sum(accuracies) / len(accuracies)
+    #     mean_loss = sum(losses) / len(losses)
+    #     mean_accuracies.append(mean_accuracy)
+    #     mean_losses.append(mean_loss)
+    #     print(f"Epoch {epoch_index}: mean validation accuracy {mean_accuracy:.2%}, mean val loss {mean_loss:.4f}")
+
+    # print(f"Cross-validation wall-clock time: {perf_counter() - cv_start:.1f} s")
+    # best_index = max(range(args.epochs), key=lambda i: (mean_accuracies[i], -mean_losses[i]))
+    # final_epochs = best_index + 1
+    # print(f"\nTraining on all {len(dataset):,} images for {final_epochs} epochs.")
+    # weights = train_fashion_model(
+    #     dataset,
+    #     n_epochs=final_epochs,
+    #     split_indices=(range(len(dataset)), []),
+    #     **training_options,
+    # )
 
     checkpoint = Path(__file__).with_name("model_weights.pth")
     torch.save({name: tensor.detach().cpu() for name, tensor in weights.items()}, checkpoint)
