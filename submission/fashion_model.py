@@ -4,13 +4,30 @@ import torch.nn.functional as F  # useful stateless functions
 
 
 class ResNetBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, stride=1):
+    def __init__(self, in_channels, out_channels, stride=1, separable=False):
         super().__init__()
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(out_channels)
-        self.conv2 = nn.Conv2d(
-            out_channels, out_channels, 3, padding=1, bias=False
-        )
+        
+        
+        if separable:
+            self.conv2 = nn.Sequential(
+                nn.Conv2d(
+                    out_channels, out_channels,
+                    kernel_size=3, padding=1,
+                    groups=out_channels, bias=False,
+                ),
+                nn.Conv2d(
+                    out_channels, out_channels,
+                    kernel_size=1, bias=False,
+                ),
+            )
+        else:
+            self.conv2 = nn.Conv2d(
+                out_channels, out_channels, kernel_size=3, padding=1, bias=False
+            )
+
+
         self.bn2 = nn.BatchNorm2d(out_channels)
         self.shortcut = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, 1, bias=False),
@@ -41,7 +58,7 @@ class Net(nn.Module):
             nn.BatchNorm2d(24),
             nn.ReLU(),
         )
-        self.block1 = ResNetBlock(24, 32)
+        self.block1 = ResNetBlock(24, 32, separable=True)
         self.block2 = ResNetBlock(32, 64)
         self.classifier = nn.Linear(64 * 3 * 3, 10)
 
