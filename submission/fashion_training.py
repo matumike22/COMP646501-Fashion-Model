@@ -6,7 +6,10 @@ This training script uses imports relative to the project root directory.
 To run this training script with uv, ensure you're in the project root directory
 and execute: uv run -m submission.fashion_training
 """
-import os
+import argparse
+from pathlib import Path
+from time import perf_counter
+
 import torch, torchvision
 
 from submission import engine
@@ -22,6 +25,7 @@ def train_fashion_model(fashion_mnist,
                         model_kwargs=None,
                         return_state_dict_only=True,
                         split_indices=None,
+                        horizontal_flip=False,
                         ):
     """
     You can modify the contents of this function as needed, but DO NOT CHANGE the arguments,
@@ -40,15 +44,6 @@ def train_fashion_model(fashion_mnist,
         device = torch.device('cpu')
     print(f"Using device: {device}")
 
-    # # Create train-val split
-    # train_size = int(0.8 * len(fashion_mnist))
-    # val_size = len(fashion_mnist) - train_size
-    # train_split, val_split = torch.utils.data.random_split(fashion_mnist, [train_size, val_size])
-
-    # # Create datasets with transforms. You may wish to apply different transforms to the training and validation datasets
-    # train_data = engine.SubsetWithTransform(fashion_mnist, train_split.indices, get_transforms('train'))
-    # val_data = engine.SubsetWithTransform(fashion_mnist, val_split.indices, get_transforms('eval'))
-
     if split_indices is None:
         train_size = int(0.8 * len(fashion_mnist))
         val_size = len(fashion_mnist) - train_size
@@ -61,10 +56,7 @@ def train_fashion_model(fashion_mnist,
         train_indices, val_indices = split_indices
 
     train_data = engine.SubsetWithTransform(
-        fashion_mnist, train_indices, get_transforms('train')
-    )
-    val_data = engine.SubsetWithTransform(
-        fashion_mnist, val_indices, get_transforms('eval')
+        fashion_mnist, train_indices, get_transforms('train', horizontal_flip=horizontal_flip)
     )
 
 
@@ -73,10 +65,12 @@ def train_fashion_model(fashion_mnist,
                                              batch_size=batch_size,
                                              shuffle=True,
                                              )
-    val_loader = torch.utils.data.DataLoader(val_data,
-                                             batch_size=batch_size,
-                                             shuffle=False,
-                                             )
+    val_loader = None
+    if len(val_indices):
+        val_data = engine.SubsetWithTransform(
+            fashion_mnist, val_indices, get_transforms('eval')
+        )
+        val_loader = torch.utils.data.DataLoader(val_data, batch_size=batch_size)
 
     # Initialize model, loss function, and optimizer
     model = Net(**(model_kwargs or {}))
@@ -91,11 +85,12 @@ def train_fashion_model(fashion_mnist,
     for epoch in range(n_epochs):
         train_loss = engine.train(model, train_loader, criterion, optimizer, device)
         print(f"Epoch [{epoch + 1}/{n_epochs}], Training Loss: {train_loss:.4f}")
-        val_loss, accuracy = engine.evaluate(model, val_loader, criterion, device)
-        print(f"Epoch [{epoch + 1}/{n_epochs}], Val Loss: {val_loss:.4f}, Accuracy: {accuracy:.4f}")
         train_losses.append(train_loss)
-        val_losses.append(val_loss)
-        val_accuracies.append(accuracy)
+        if val_loader is not None:
+            val_loss, accuracy = engine.evaluate(model, val_loader, criterion, device)
+            print(f"Epoch [{epoch + 1}/{n_epochs}], Val Loss: {val_loss:.4f}, Accuracy: {accuracy:.4f}")
+            val_losses.append(val_loss)
+            val_accuracies.append(accuracy)
         scheduler.step()
 
     # Return the model's state_dict (weights) - DO NOT CHANGE THIS
@@ -105,7 +100,7 @@ def train_fashion_model(fashion_mnist,
     return model.state_dict(), train_losses, val_losses, val_accuracies
 
 
-def get_transforms(mode='train'):
+def get_transforms(mode='train', *, horizontal_flip=False):
     """
     Define any data augmentations or preprocessing here if needed.
     Only standard torchvision transforms are permitted (no lambda functions, sorry), please check that 
@@ -113,17 +108,14 @@ def get_transforms(mode='train'):
     deterministic (no random augmentation), so only use transforms such as ToTensor, Normalize,
     Pad, Resize or CenterCrop there.
     """
-    if mode == 'train':
-        tfs = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(), # convert images to tensors
-        ])
-    elif mode == 'eval': # deterministic transforms only
-        tfs = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(), # convert images to tensors
-        ])
-    else:
-        raise ValueError(f"Unknown mode {mode} for transforms, must be 'train' or 'eval'.")
-    return tfs
+    if mode not in ('train', 'eval'):
+        raise ValueError(f"Unknown mode {mode!r}, expected 'train' or 'eval'.")
+
+    preprocessing = []
+    if mode == 'train' and horizontal_flip:
+        preprocessing.append(torchvision.transforms.RandomHorizontalFlip(p=0.5))
+    preprocessing.append(torchvision.transforms.ToTensor())
+    return torchvision.transforms.Compose(preprocessing)
 
 
 def load_training_data():
@@ -140,47 +132,66 @@ def load_training_data():
 
 
 def main():
-    # example usage
-    # you could create a separate file that calls train_fashion_model with different parameters
-    # or modify this as needed to add cross-validation, hyperparameter tuning, etc.
-    fashion_mnist = load_training_data()
-   
+    parser = argparse.ArgumentParser(description="Cross-validate and train the Fashion-MNIST model.")
+    parser.add_argument("--epochs", type=int, default=20, help="Epochs to evaluate per fold.")
+    parser.add_argument("--gpu", action="store_true", help="Train on CUDA.")
+    parser.add_argument("--horizontal-flip", action="store_true", help="Flip training images with probability 0.5.")
+    args = parser.parse_args()
+    if args.epochs < 1:
+        parser.error("--epochs must be at least 1")
+    if args.gpu and not torch.cuda.is_available():
+        parser.error("--gpu requires a CUDA runtime")
+    if args.gpu:
+        print(f"GPU: {torch.cuda.get_device_name(0)}")
 
-    # TODO: create data splits
+    dataset = load_training_data()
     splitter = StratifiedKFold(n_splits=5, shuffle=True, random_state=0)
-    folds = list(splitter.split(fashion_mnist.data, fashion_mnist.targets))
-    # TODO: implement hyperparameter search
+    folds = list(splitter.split(dataset.data, dataset.targets))
+    training_options = dict(USE_GPU=args.gpu, seed=0, horizontal_flip=args.horizontal_flip)
 
-    # Train model 
-    # TODO: this may be done within a loop for hyperparameter search / cross-validation
-   
     fold_accuracies = []
-    n_epochs = 7
-
+    fold_losses = []
+    cv_start = perf_counter()
 
     for fold_number, split in enumerate(folds, start=1):
         print(f"\nFold {fold_number}/{len(folds)}")
-
-        model_weights, _, _, val_accuracies = train_fashion_model(
-            fashion_mnist,
-            n_epochs=n_epochs,
-            seed=0,
+        fold_start = perf_counter()
+        _, _, val_losses, val_accuracies = train_fashion_model(
+            dataset,
+            n_epochs=args.epochs,
             split_indices=split,
             return_state_dict_only=False,
+            **training_options,
         )
-
+        fold_losses.append(val_losses)
         fold_accuracies.append(val_accuracies)
+        print(f"Fold {fold_number} wall-clock time: {perf_counter() - fold_start:.1f} s")
 
-    for epoch_index in range(n_epochs):
-        scores = [history[epoch_index] for history in fold_accuracies]
-        mean_accuracy = sum(scores) / len(scores)
-        print(f"Epoch {epoch_index + 1}: mean validation accuracy {mean_accuracy:.2%}")
+    mean_accuracies = []
+    mean_losses = []
+    for epoch_index, (accuracies, losses) in enumerate(
+        zip(zip(*fold_accuracies), zip(*fold_losses)), start=1
+    ):
+        mean_accuracy = sum(accuracies) / len(accuracies)
+        mean_loss = sum(losses) / len(losses)
+        mean_accuracies.append(mean_accuracy)
+        mean_losses.append(mean_loss)
+        print(f"Epoch {epoch_index}: mean validation accuracy {mean_accuracy:.2%}, mean val loss {mean_loss:.4f}")
 
-    # Save model weights
-    # However you tune and evaluate your model, make sure to save the final weights 
-    # to submission/model_weights.pth before submission!
-    model_save_path = os.path.join('submission', 'model_weights.pth')
-    torch.save(model_weights, f=model_save_path)
+    print(f"Cross-validation wall-clock time: {perf_counter() - cv_start:.1f} s")
+    best_index = max(range(args.epochs), key=lambda i: (mean_accuracies[i], -mean_losses[i]))
+    final_epochs = best_index + 1
+    print(f"\nTraining on all {len(dataset):,} images for {final_epochs} epochs.")
+    weights = train_fashion_model(
+        dataset,
+        n_epochs=final_epochs,
+        split_indices=(range(len(dataset)), []),
+        **training_options,
+    )
+
+    checkpoint = Path(__file__).with_name("model_weights.pth")
+    torch.save({name: tensor.detach().cpu() for name, tensor in weights.items()}, checkpoint)
+    print(f"Saved {checkpoint}")
 
 
 if __name__ == "__main__":
