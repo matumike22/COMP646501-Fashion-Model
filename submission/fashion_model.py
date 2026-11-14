@@ -60,7 +60,7 @@ class Net(nn.Module):
         )
         self.block1 = ResNetBlock(24, 32, separable=True)
         self.block2 = ResNetBlock(32, 48)
-        self.classifier = nn.Linear(48 * 7 * 7, 10)
+        self.classifier = nn.Linear(48 * 4 * 4, 10)
 
 
     def forward(self, x):
@@ -70,6 +70,6 @@ class Net(nn.Module):
         x = F.max_pool2d(self.block2(x), 2)
 
 
-        # x = F.adaptive_avg_pool2d(x, (3, 3))
+        x = F.adaptive_avg_pool2d(x, (4, 4))
         x = torch.flatten(x, start_dim=1)
         return self.classifier(x)
