@@ -73,7 +73,7 @@ def train_fashion_model(fashion_mnist,
     # Initialize model, loss function, and optimizer
     model = Net(**(model_kwargs or {}))
     model.to(device)
-    criterion = torch.nn.CrossEntropyLoss(label_smoothing=0.1)
+    criterion = torch.nn.CrossEntropyLoss(label_smoothing=0.3)
     criterion.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
