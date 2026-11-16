@@ -130,8 +130,9 @@ def load_training_data():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train Fashion-MNIST with a fixed 80/20 train/validation split.")
+    parser = argparse.ArgumentParser(description="Train the Fashion-MNIST model.")
     parser.add_argument("--epochs", type=int, default=60, help="Number of training epochs.")
+    parser.add_argument("--full-data", action="store_true", help="Train on all images without a validation split.")
     parser.add_argument("--gpu", action="store_true", help="Train on CUDA.")
     parser.add_argument("--horizontal-flip", action="store_true", help="Flip training images with probability 0.5.")
     args = parser.parse_args()
@@ -145,8 +146,20 @@ def main():
     dataset = load_training_data()
     training_options = dict(USE_GPU=args.gpu, seed=0, horizontal_flip=args.horizontal_flip)
 
-    # Single 80/20 split. Comment out this call before enabling cross-validation.
-    weights = train_fashion_model(dataset, n_epochs=60, **training_options)
+    split_indices = None
+    checkpoint_name = "model_weights.pth"
+    if args.full_data:
+        split_indices = (range(len(dataset)), [])
+        checkpoint_name = f"model_weights_full_{args.epochs}_epochs.pth"
+        print(f"Training on all {len(dataset):,} images for {args.epochs} epochs.")
+
+    # Comment out this call before enabling cross-validation.
+    weights = train_fashion_model(
+        dataset,
+        n_epochs=19,
+        split_indices=(range(len(dataset)), []), #train on all data for final submission
+        **training_options,
+    )
 
     # To use cross-validation, uncomment the block below through the final fit.
     # from time import perf_counter
@@ -194,7 +207,7 @@ def main():
     #     **training_options,
     # )
 
-    checkpoint = Path(__file__).with_name("model_weights.pth")
+    checkpoint = Path(__file__).with_name(checkpoint_name)
     torch.save({name: tensor.detach().cpu() for name, tensor in weights.items()}, checkpoint)
     print(f"Saved {checkpoint}")
 
