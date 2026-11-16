@@ -73,7 +73,7 @@ def train_fashion_model(fashion_mnist,
     # Initialize model, loss function, and optimizer
     model = Net(**(model_kwargs or {}))
     model.to(device)
-    criterion = torch.nn.CrossEntropyLoss()
+    criterion = torch.nn.CrossEntropyLoss(label_smoothing=0.5)
     criterion.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.3)
@@ -157,7 +157,7 @@ def main():
     weights = train_fashion_model(
         dataset,
         n_epochs=19,
-        split_indices=(range(len(dataset)), []), #train on all data for final submission
+        split_indices=(range(len(dataset)), []),
         **training_options,
     )
 
