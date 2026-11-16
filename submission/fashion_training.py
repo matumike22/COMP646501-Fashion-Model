@@ -160,7 +160,7 @@ def main():
     # Comment out this call before enabling cross-validation.
     weights = train_fashion_model(
         dataset,
-        n_epochs=40,
+        n_epochs=19,
         split_indices=(range(len(dataset)), []),
         **training_options,
     )
