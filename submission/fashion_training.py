@@ -76,7 +76,11 @@ def train_fashion_model(fashion_mnist,
     criterion = torch.nn.CrossEntropyLoss(label_smoothing=0.5)
     criterion.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.3)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=max(1, n_epochs - 1),
+        eta_min=0.000027,
+    )
 
     # Training loop
     train_losses, val_losses, val_accuracies = [], [], []
