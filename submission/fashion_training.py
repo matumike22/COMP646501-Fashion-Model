@@ -131,7 +131,7 @@ def load_training_data():
 
 def main():
     parser = argparse.ArgumentParser(description="Train Fashion-MNIST with a fixed 80/20 train/validation split.")
-    parser.add_argument("--epochs", type=int, default=40, help="Number of training epochs.")
+    parser.add_argument("--epochs", type=int, default=60, help="Number of training epochs.")
     parser.add_argument("--gpu", action="store_true", help="Train on CUDA.")
     parser.add_argument("--horizontal-flip", action="store_true", help="Flip training images with probability 0.5.")
     args = parser.parse_args()
@@ -146,7 +146,7 @@ def main():
     training_options = dict(USE_GPU=args.gpu, seed=0, horizontal_flip=args.horizontal_flip)
 
     # Single 80/20 split. Comment out this call before enabling cross-validation.
-    weights = train_fashion_model(dataset, n_epochs=40, **training_options)
+    weights = train_fashion_model(dataset, n_epochs=60, **training_options)
 
     # To use cross-validation, uncomment the block below through the final fit.
     # from time import perf_counter

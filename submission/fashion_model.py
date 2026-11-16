@@ -51,8 +51,7 @@ class Net(nn.Module):
     def __init__(self, input_size=28*28, hidden_size=128, num_classes=10):
         super(Net, self).__init__()
 
-        # We define the layers of our model here by instantiating layer objects.
-        # Here we define two fully connected (linear) layers.
+       
         self.stem = nn.Sequential(
             nn.Conv2d(1, 24, 3, padding=1, bias=False),
             nn.BatchNorm2d(24),
